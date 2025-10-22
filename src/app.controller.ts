@@ -5,7 +5,7 @@ import { SoapService } from './soap/soap.service';
 export class SoapController {
   constructor(private readonly soapService: SoapService) {}
 
-  @Get('list-cards')
+  @Get('card-list')
   async getCardList(@Query('cpr') cpr: string) {
     return this.soapService.getCardList(cpr);
   }
