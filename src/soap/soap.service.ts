@@ -117,7 +117,7 @@ export class SoapService {
         // Card_status_reason: card.Card_status_reason || '',
         ClientCode: card.ClientCode || '',
         CprId: card.CprId || '',
-        CurrentBalance: card.CurrentBalance || '',
+        // CurrentBalance: card.CurrentBalance || '',
         // Delivery_card_flag: card.Delivery_card_flag || '',
         // Direct_debit: card.Direct_debit || '',
         EmbossingName: card.EmbossingName || '',
