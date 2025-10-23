@@ -33,6 +33,37 @@ export interface Card {
   status_code: string;
 }
 
+export interface Statement {
+  CREDIT_LIMIT: string;
+  CURRENT_BALANCE: string;
+  CardNumber: string;
+  MCC_Code: string;
+  MCC_Name: string;
+  TOTAL_FEES: string;
+  TOTAL_PAYMENTS_CREDIT: string;
+  TOTAL_PURCHASE_CASH_ADVANCE: string;
+  TOTAL_VAT_AMOUNT_4: string;
+  VAT_AMOUNT_4: string;
+  VAT_AMOUNT_4_TYPE: string;
+  VAT_MARKUP_AMOUNT: string;
+  billing_amount: string;
+  closing_balance: string;
+  date_create: string;
+  description: string;
+  due_date: string;
+  microfilm_ref_number: string;
+  microfilm_ref_seq: string;
+  minimum_due: string;
+  posting_date: string;
+  shadow_account_nbr: string;
+  transaction_amount: string;
+  transaction_code: string;
+  transaction_currency: string;
+  transaction_date: string;
+  transaction_wording: string;
+  user_create: string;
+}
+
 @Injectable()
 export class SoapService {
   private readonly logger = new Logger(SoapService.name);
@@ -93,6 +124,75 @@ export class SoapService {
     }
   }
 
+  async getStatementTransactions(
+    cpr: string,
+    cardNumber: string,
+    statementFlag: string = 'c',
+  ): Promise<Statement[]> {
+    if (!cpr || !cardNumber) {
+      throw new BadRequestException('CPR and cardNumber parameters are required');
+    }
+
+    const soapEnvelope = `<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Header/>
+  <soap:Body>
+    <F8_GetCurrentStatementTransaction xmlns="http://tempuri.org/">
+      <pCpr>${cpr}</pCpr>
+      <pCardNumber>${cardNumber}</pCardNumber>
+      <StatmentFlag>${statementFlag}</StatmentFlag>
+    </F8_GetCurrentStatementTransaction>
+  </soap:Body>
+</soap:Envelope>`;
+
+    try {
+      this.logger.log(
+        `Fetching statement transactions for CPR: ${cpr}, Card: ${cardNumber}`,
+      );
+
+      const response = await axios.post(this.endpoint, soapEnvelope, {
+        headers: {
+          'Content-Type': 'text/xml; charset=utf-8',
+          'SOAPAction':
+            '"http://tempuri.org/IServicesGps/F8_GetCurrentStatementTransaction"',
+        },
+        httpsAgent: new https.Agent({
+          rejectUnauthorized: false,
+        }),
+        timeout: 10000,
+      });
+
+      // Parse XML to JSON
+      const parsedResponse = await parseStringPromise(response.data, {
+        explicitArray: false,
+        ignoreAttrs: true,
+        tagNameProcessors: [(name) => name.replace(/^[a-z]:/, '')],
+      });
+
+      // Extract statements from the parsed response
+      const statements = this.extractStatements(parsedResponse);
+
+      this.logger.log(
+        `Successfully fetched ${statements.length} statement transactions`,
+      );
+
+      return statements;
+    } catch (error) {
+      this.logger.error(
+        `Error fetching statement transactions for CPR ${cpr}:`,
+        error,
+      );
+
+      if (error instanceof AxiosError) {
+        throw new BadRequestException(
+          `SOAP API Error: ${error.message}`,
+        );
+      }
+
+      throw error;
+    }
+  }
+
   private extractCards(parsedResponse: any): Card[] {
     try {
       const body = parsedResponse?.Envelope?.Body;
@@ -138,6 +238,58 @@ export class SoapService {
       }));
     } catch (error) {
       this.logger.error('Error extracting cards from response:', error);
+      return [];
+    }
+  }
+
+  private extractStatements(parsedResponse: any): Statement[] {
+    try {
+      const body = parsedResponse?.Envelope?.Body;
+      const statementResult =
+        body?.F8_GetCurrentStatementTransactionResponse
+          ?.F8_GetCurrentStatementTransactionResult;
+
+      if (!statementResult || !statementResult.Statement) {
+        return [];
+      }
+
+      // Handle both single statement and multiple statements
+      const statementsData = Array.isArray(statementResult.Statement)
+        ? statementResult.Statement
+        : [statementResult.Statement];
+
+      return statementsData.map((statement: any) => ({
+        // CREDIT_LIMIT: statement.CREDIT_LIMIT || '',
+        CURRENT_BALANCE: statement.CURRENT_BALANCE || '',
+        CardNumber: statement.CardNumber || '',
+        // MCC_Code: statement.MCC_Code || '',
+        // MCC_Name: statement.MCC_Name || '',
+        // TOTAL_FEES: statement.TOTAL_FEES || '',
+        // TOTAL_PAYMENTS_CREDIT: statement.TOTAL_PAYMENTS_CREDIT || '',
+        // TOTAL_PURCHASE_CASH_ADVANCE: statement.TOTAL_PURCHASE_CASH_ADVANCE || '',
+        // TOTAL_VAT_AMOUNT_4: statement.TOTAL_VAT_AMOUNT_4 || '',
+        // VAT_AMOUNT_4: statement.VAT_AMOUNT_4 || '',
+        // VAT_AMOUNT_4_TYPE: statement.VAT_AMOUNT_4_TYPE || '',
+        // VAT_MARKUP_AMOUNT: statement.VAT_MARKUP_AMOUNT || '',
+        billing_amount: statement.billing_amount || '',
+        // closing_balance: statement.closing_balance || '',
+        date_create: statement.date_create || '',
+        description: statement.description || '',
+        // due_date: statement.due_date || '',
+        // microfilm_ref_number: statement.microfilm_ref_number || '',
+        // microfilm_ref_seq: statement.microfilm_ref_seq || '',
+        // minimum_due: statement.minimum_due || '',
+        posting_date: statement.posting_date || '',
+        // shadow_account_nbr: statement.shadow_account_nbr || '',
+        transaction_amount: statement.transaction_amount || '',
+        transaction_code: statement.transaction_code || '',
+        transaction_currency: statement.transaction_currency || '',
+        transaction_date: statement.transaction_date || '',
+        transaction_wording: statement.transaction_wording || '',
+        // user_create: statement.user_create || '',
+      }));
+    } catch (error) {
+      this.logger.error('Error extracting statements from response:', error);
       return [];
     }
   }
